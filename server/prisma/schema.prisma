@@ -1,0 +1,86 @@
+// Prisma schema for the YouTube Comment Analyzer
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AnalysisStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum CommentClassification {
+  QUESTION
+  PROBLEM
+  REQUEST
+  OPINION
+  THANKS
+  SPAM
+  OTHER
+}
+
+model Analysis {
+  id               String         @id @default(cuid())
+  youtubeVideoId   String
+  videoUrl         String
+  videoTitle       String?
+  channelTitle     String?
+  thumbnailUrl     String?
+  viewCount        String? // stored as string: YouTube view counts can exceed Int range
+  commentCount     Int? // total comments reported by YouTube (may differ from fetched)
+  publishedAt      DateTime?
+  status           AnalysisStatus @default(PENDING)
+  totalComments    Int            @default(0)
+  relevantComments Int            @default(0)
+  errorMessage     String?
+  createdAt        DateTime       @default(now())
+  completedAt      DateTime?
+
+  comments Comment[]
+  clusters FAQCluster[]
+
+  @@index([youtubeVideoId])
+  @@index([createdAt])
+}
+
+model FAQCluster {
+  id                     String   @id @default(cuid())
+  analysisId             String
+  representativeQuestion String
+  frequency              Int      @default(0)
+  score                  Int      @default(0)
+  createdAt              DateTime @default(now())
+
+  analysis Analysis  @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  comments Comment[]
+
+  @@index([analysisId])
+}
+
+model Comment {
+  id               String                 @id @default(cuid())
+  analysisId       String
+  youtubeCommentId String
+  text             String
+  author           String?
+  likeCount        Int                    @default(0)
+  publishedAt      DateTime?
+  classification   CommentClassification?
+  clusterId        String?
+  createdAt        DateTime               @default(now())
+
+  analysis Analysis    @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  cluster  FAQCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+
+  @@index([analysisId])
+  @@index([clusterId])
+  @@index([classification])
+}
